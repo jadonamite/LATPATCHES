@@ -1,0 +1,5 @@
+# ELAN touchscreen (04f3:0111) is failing and re-enumerates every ~2s.
+# Keep it deauthorized and ignored by libinput; the port itself is disabled
+# by disable-elan-touchscreen.service.
+SUBSYSTEM=="usb", DEVTYPE=="usb_device", ATTR{idVendor}=="04f3", ATTR{idProduct}=="0111", ATTR{authorized}="0"
+SUBSYSTEM=="input", ATTRS{idVendor}=="04f3", ATTRS{idProduct}=="0111", ENV{LIBINPUT_IGNORE_DEVICE}="1"

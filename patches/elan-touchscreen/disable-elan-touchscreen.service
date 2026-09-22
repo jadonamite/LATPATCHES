@@ -1,0 +1,11 @@
+[Unit]
+Description=Disable failing ELAN touchscreen USB port
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'echo 1 > /sys/bus/usb/devices/2-1:1.0/2-1-port8/disable'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
