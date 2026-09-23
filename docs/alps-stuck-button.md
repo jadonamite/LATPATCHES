@@ -1,6 +1,6 @@
 # ALPS DualPoint touchpad: BTN_RIGHT stuck pressed
 
-Status: **open** — hardware fault, no software fix
+Status: **mitigated** 2026-09-23 — underlying hardware fault unrepaired
 
 ## Symptom
 
@@ -56,25 +56,57 @@ Each reload also creates a new X device id — the touchpad went from `input6`
 at boot to `input2158` — so per-device settings reset, and any `xinput`-based
 workaround is lost.
 
-## Why button remapping does not work
+## Masking the button
 
-Masking button 3 is the obvious mitigation:
+Masking button 3 keeps the touchpad usable and stops the grab:
 
     xinput set-button-map <id> 1 2 0 4 5 6 7
 
-X rejects it with `MappingBusy` while a button on the device is held. The
-button map cannot be changed precisely because the button is stuck. The call
-fails silently through `xinput` — the map simply reads back unchanged.
+The obstacle is that X rejects a button-map change with `MappingBusy` while a
+button on the device is held — and this one is held permanently. Applied
+directly it fails silently through `xinput`; the map simply reads back
+unchanged.
 
-## Mitigation
+The way around it is to disable the device first. That clears X's view of the
+button state, the map is applied in that window, and the device is re-enabled
+with the mask in place:
 
-Disable the touchpad and drive the machine from the TrackPoint stick or an
-external mouse:
+    gsettings set org.gnome.desktop.peripherals.touchpad send-events disabled
+    xinput set-button-map <id> 1 2 0 4 5 6 7
+    gsettings set org.gnome.desktop.peripherals.touchpad send-events enabled
+
+The touchpad keeps pointing, tap-to-click and two-finger scroll. Only the
+right button — already useless — is lost. Right-click remains available on
+the TrackPoint buttons and any external mouse.
+
+Verified over 10 samples at 2s intervals with the touchpad enabled: the
+touchpad reports no buttons down and the master pointer holds no grab.
+
+### Persistence
+
+The map lives on the X device, so it is lost whenever the device is recreated
+— at login, and on every `psmouse` reload. At session start the button is
+already stuck, so a plain remap would hit `MappingBusy` again; the disable and
+re-enable steps are what make it reliable there.
+
+`patches/alps-stuck-button/mask-stuck-button.sh` performs the sequence and
+verifies the resulting map. It is installed to `~/.local/bin` and run by a
+systemd user unit bound to `graphical-session.target`:
+
+    systemctl --user enable --now mask-stuck-button.service
+
+Re-run it by hand after any `psmouse` reload.
+
+## Earlier mitigation: disabling the touchpad
+
+Before the mask was found to work, the touchpad was disabled outright:
 
     gsettings set org.gnome.desktop.peripherals.touchpad send-events disabled
 
-This survives reboots and psmouse reloads, since GNOME reapplies it per-device
-as devices appear. Reverse with `send-events enabled`.
+This is still the fallback if the mask ever fails — it makes the grab
+structurally impossible, at the cost of all touchpad input. Pointing then
+falls to the TrackPoint stick, which reads clean across all 7 of its buttons,
+or an external mouse.
 
 ## Repair
 
